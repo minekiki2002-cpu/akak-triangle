@@ -158,3 +158,28 @@ dialog#teacher::backdrop{background:rgba(43,52,89,.4)}
 #menu{overflow-y:auto;padding:60px 12px 24px}
 .menu-card{margin-bottom:24px}
 dialog#teacher{max-height:calc(100dvh - 24px);overflow-y:auto}
+
+/* 答題後的圖片說明 */
+.fig{margin:10px 0 0;padding:10px 12px;border:2px solid var(--teal);border-radius:14px;background:#fff;animation:figIn .5s ease both}
+@keyframes figIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.fig .fig-art svg{display:block;width:100%;max-width:520px;height:auto;margin:0 auto}
+.fig figcaption{margin-top:6px;font-size:15px;color:var(--ink);line-height:1.6;border-top:1px dashed var(--line);padding-top:6px}
+.anim-info{text-align:center;font-size:16px;margin-top:4px}
+.anim-table{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:6px 0}
+.anim-table span{border:2px solid var(--line);border-radius:10px;padding:2px 8px;font-size:14px;background:#fffdf7}
+.fig .btn{display:block;margin:6px auto 0}
+.lbl{font-weight:700;margin-top:12px;font-size:15px}
+.gallery{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;min-height:20px}
+.gallery .thumb{border:2px solid var(--line);border-radius:12px;background:#fff;padding:4px;width:96px;text-align:center;font-size:12px}
+.gallery .thumb svg{display:block;width:100%;height:60px}
+
+/* 疊合：滑桿與對應 */
+.sliders{display:flex;flex-wrap:wrap;gap:6px 18px;margin:8px 0}
+.rng{display:flex;align-items:center;gap:8px;font-weight:700;flex:1 1 220px}
+.rng input[type=range]{flex:1;accent-color:var(--coral);height:32px;min-width:120px}
+.rngval{min-width:3.2em;font-variant-numeric:tabular-nums;color:var(--coral-d)}
+.corr select{font-size:16px;padding:6px 8px;border:2px solid var(--ink);border-radius:10px;background:#fff;min-height:40px}
+.corr-out p{margin:4px 0}
+.warn-t{color:var(--coral-d)}
+.corr-data{margin-top:8px;border-top:1px dashed var(--line);padding-top:6px}
+.key-t{color:var(--coral-d);font-weight:700}

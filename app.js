@@ -152,7 +152,8 @@ function save() { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch 
 function msgBox() { return h('div', { class: 'msg', role: 'status' }); }
 function say(el, text, type = 'info') { el.className = 'msg ' + type; el.innerHTML = text; }
 /* 選擇題：答錯可以再選，答對才往下 */
-function mcq(q, opts, onRight) {
+/* fig：答對後出現的圖片說明（見 figs.js） */
+function mcq(q, opts, onRight, fig) {
   const box = h('div', { class: 'mcq' }, h('div', { class: 'q' }, q));
   const list = h('div', { class: 'opts' }); const m = msgBox();
   let done = false;
@@ -162,7 +163,7 @@ function mcq(q, opts, onRight) {
       if (done) return;
       if (o.ok) {
         done = true; b.classList.add('right'); list.querySelectorAll('button').forEach(x => x.disabled = true);
-        say(m, o.why || '答對了！', 'good'); onRight && onRight();
+        say(m, o.why || '答對了！', 'good'); if (fig && window.figBox) box.append(window.figBox(fig)); onRight && onRight();
       } else { b.classList.add('wrong'); say(m, o.why || '再想想看。', 'warn'); }
     });
     list.append(b);
@@ -193,6 +194,7 @@ CH.push({
   parts: [{ title: '幫報名處檢查', how: '點一張卡片，判斷它是不是三角形。如果不是，要說出原因。', mount: mountSort }],
   think: {
     who: 'akak', text: '那個瘦瘦長長、尖端朝下的形狀，看起來怪怪的，一定不是三角形。',
+    fig: () => FIG.anyWay(),
     q: '你同意阿角嗎？',
     opts: [
       { t: '同意，三角形的尖端要朝上。', why: '再看看那張卡片：它有沒有三條直直的邊？有沒有三個頂點？有沒有圍起來？方向和胖瘦會影響嗎？' },
@@ -263,6 +265,7 @@ CH.push({
   ],
   think: {
     who: 'akak', text: '如果三根木樁排成一直線，也是三條線段，一樣可以把花圍起來吧？',
+    fig: () => FIG.collinear(),
     q: '你同意阿角嗎？',
     opts: [
       { t: '同意，只要有三條線段就能圍起來。', why: '試著想像三個點排在同一條直線上：線段會疊在一起，中間有沒有空間可以放花？' },
@@ -382,6 +385,7 @@ CH.push({
   ],
   think: {
     who: 'akak', text: '等腰三角形的「底」一定在最下面，所以 4 號三角形斜斜的，不是等腰三角形。',
+    fig: () => FIG.isoSpin(),
     q: '你同意阿角嗎？',
     opts: [
       { t: '同意，底邊要在下面才是等腰三角形。', why: '量一量 4 號的三條邊：有沒有兩條一樣長？轉一個方向，邊長會改變嗎？' },
@@ -479,7 +483,7 @@ function mountIso(el, done) {
     ], () => qbox.append(mcq('1 號是正三角形（三條邊都一樣長）。它也是等腰三角形嗎？', [
       { t: '是，因為它有兩條邊一樣長（其實三條都一樣長）。', ok: true, why: '對！等腰三角形只要有兩條邊一樣長；正三角形三條邊都一樣長，所以也是等腰三角形。正三角形的三個角都是 60 度。' },
       { t: '不是，等腰三角形只能有兩條邊一樣長。', why: '等腰三角形的意思是「至少有兩條邊一樣長」。正三角形有沒有兩條邊一樣長？' }
-    ], done))));
+    ], done, () => FIG.eqIsIso())), () => FIG.baseAngles()));
   }
   svg.addEventListener('pointerdown', e => { const p = svgPt(svg, e); if (dist(p, A) < 0.9) { drag = true; svg.setPointerCapture(e.pointerId); } });
   svg.addEventListener('pointermove', e => { if (!drag) return; const p = svgPt(svg, e); A = { x: Math.min(11.5, Math.max(0.5, snap(p.x, 0.5))), y: Math.min(5.5, Math.max(0.5, snap(p.y, 0.5))) }; check(); });
@@ -503,6 +507,7 @@ CH.push({
   ],
   think: {
     who: 'akak', text: '我找到一個銳角，所以這個三角形一定是銳角三角形！',
+    fig: () => FIG.biggestAngle(),
     q: '你同意阿角嗎？',
     opts: [
       { t: '同意，有銳角就是銳角三角形。', why: '想一想直角三角形和鈍角三角形：它們有沒有銳角？' },
@@ -575,40 +580,71 @@ function mountAngleLab(el, done) {
   const svg = svgEl('0 0 12 8'); const box = h('div', { class: 'stage' }); box.append(svg);
   let pts = P([[3, 6.5], [9, 6.5], [5, 2]]); let drag = -1; const goal = { right: false, obtuse: false };
   const m = msgBox(), info = h('div', { class: 'readout' }), list = h('ul', { class: 'check' });
-  const qbox = h('div'); let qShown = false;
-  const giveUp = h('button', { class: 'btn small', type: 'button', disabled: true, onclick: () => { if (qShown) return; qShown = true; giveUp.disabled = true; explain(); } }, '我覺得做不出兩個直角');
-  function kinds() { return [0, 1, 2].map(i => angleAt(pts, i)); }
+  const qbox = h('div'); let qShown = false, tries = 0, closest = 0;
+  const TRY_NEED = 4;
+  const giveUp = h('button', { class: 'btn small', type: 'button', disabled: true, onclick: () => { if (qShown) return; qShown = true; giveUp.disabled = true; draw(); explain(); } }, '我試過了，做不出兩個直角');
+  const angs = () => [0, 1, 2].map(i => angleAt(pts, i));
+  const isR = a => Math.abs(a - 90) < 0.5;
   function draw() {
-    const a = kinds(), nR = a.filter(x => Math.abs(x - 90) < 0.5).length, nO = a.filter(x => x > 90.5).length;
-    let s = gridSVG(12, 8, 0.5) + `<polygon points="${ps(pts)}" fill="rgba(242,184,75,.25)" stroke="#2b3459" stroke-width="0.09" stroke-linejoin="round"/>`;
+    const a = angs(), nR = a.filter(isR).length, nO = a.filter(x => x > 90.5).length;
+    let s = gridSVG(12, 8, 0.5);
+    /* 有一個直角時：在另一個底角畫一條「如果它也是直角」的虛線，讓學生看到兩條邊會平行 */
+    const ri = a.findIndex(isR);
+    if (ri >= 0 && goal.right && goal.obtuse) {
+      const others = [0, 1, 2].filter(i => i !== ri).sort((x, y) => a[y] - a[x]); const j = others[0], k = others[1];
+      const R = pts[ri], J = pts[j], K = pts[k];
+      const u = { x: (J.x - R.x) / dist(R, J), y: (J.y - R.y) / dist(R, J) }; // 底邊方向（直角頂點 → 另一個頂點）
+      const up = { x: (K.x - R.x) / dist(R, K), y: (K.y - R.y) / dist(R, K) }; // 直角那條邊的方向
+      const far = 14;
+      s += `<line x1="${R.x}" y1="${R.y}" x2="${R.x + up.x * far}" y2="${R.y + up.y * far}" stroke="#2b3459" stroke-width="0.06" stroke-dasharray="0.25 0.18" opacity=".7"/>`;
+      s += `<line x1="${J.x}" y1="${J.y}" x2="${J.x + up.x * far}" y2="${J.y + up.y * far}" stroke="#e8735a" stroke-width="0.09" stroke-dasharray="0.3 0.2"/>`;
+      const q = { x: J.x + up.x * 1.2, y: J.y + up.y * 1.2 };
+      s += `<polyline points="${ps([{ x: J.x + up.x * 0.4, y: J.y + up.y * 0.4 }, { x: J.x + up.x * 0.4 - u.x * 0.4, y: J.y + up.y * 0.4 - u.y * 0.4 }, { x: J.x - u.x * 0.4, y: J.y - u.y * 0.4 }])}" fill="none" stroke="#e8735a" stroke-width="0.05"/>`;
+      s += `<text x="${q.x + 0.25}" y="${q.y}" font-size="0.38" fill="#c4553d" font-weight="700">如果這裡也是直角……</text>`;
+    }
+    s += `<polygon points="${ps(pts)}" fill="rgba(242,184,75,.25)" stroke="#2b3459" stroke-width="0.09" stroke-linejoin="round"/>`;
     pts.forEach((p, i) => {
-      const col = Math.abs(a[i] - 90) < 0.5 ? '#c4553d' : a[i] > 90 ? '#b65fa8' : '#2f9c95';
+      const col = isR(a[i]) ? '#c4553d' : a[i] > 90 ? '#b65fa8' : '#2f9c95';
       s += `<path d="${arcPath(p, pts[(i + 2) % 3], pts[(i + 1) % 3], 0.7)}" fill="${col}" opacity=".4"/>`;
-      const l = labelPos(pts, i, 0.6); s += `<text x="${l.x}" y="${l.y + 0.15}" font-size="0.45" text-anchor="middle" font-weight="700" fill="${col}">${Math.round(a[i])}°</text>`;
+      const l = labelPos(pts, i, 0.6); s += `<text x="${l.x}" y="${l.y + 0.15}" font-size="0.48" text-anchor="middle" font-weight="700" fill="${col}">${Math.round(a[i])}°</text>`;
       s += `<circle cx="${p.x}" cy="${p.y}" r="0.3" fill="#e8735a" stroke="#fff" stroke-width="0.08"/>`;
     });
     svg.innerHTML = s;
     info.innerHTML = `<span>直角：${nR} 個</span><span>鈍角：${nO} 個</span><span>銳角：${3 - nR - nO} 個</span>`;
     if (nR >= 1) goal.right = true; if (nO >= 1) goal.obtuse = true;
-    list.innerHTML = ''; [['right', '做出一個直角三角形'], ['obtuse', '做出一個鈍角三角形']].forEach(([k, t]) => list.append(h('li', { class: goal[k] ? 'ok' : '' }, t)));
-    giveUp.disabled = qShown || !(goal.right && goal.obtuse);
+    list.innerHTML = '';
+    [['right', '做出一個直角三角形', goal.right], ['obtuse', '做出一個鈍角三角形', goal.obtuse], ['two', `挑戰：讓兩個角都變成直角（試了 ${tries} 次）`, tries >= TRY_NEED]].forEach(([k, t, ok]) => list.append(h('li', { class: ok ? 'ok' : '' }, t)));
+    giveUp.disabled = qShown || tries < TRY_NEED;
   }
   function explain() {
-    say(m, '想像角 B 已經是直角，再讓角 C 也變成直角：從 B 和 C 往上的兩條邊會變成兩條<b>平行線</b>，永遠碰不到，第三個頂點就做不出來，三角形圍不起來。', 'info');
-    qbox.append(mcq('一個三角形最多可以有幾個直角？', [{ t: '0 個' , why: '直角三角形就有一個直角喔。' }, { t: '1 個', ok: true, why: '對！最多只有一個直角。' }, { t: '2 個', why: '兩個直角的話，兩條邊會平行，圍不起來。' }, { t: '3 個', why: '三個直角，那就變成四邊形的樣子了，圍不出三角形。' }],
-      () => qbox.append(mcq('一個三角形最多可以有幾個鈍角？', [{ t: '1 個', ok: true, why: '對！鈍角比直角還大，兩個鈍角的邊張得更開，更不可能碰在一起。' }, { t: '2 個', why: '兩個直角都做不到了，兩個比直角還大的角呢？' }, { t: '3 個', why: '試著把兩個角都拖成鈍角看看，做得到嗎？' }], done))));
+    say(m, '你試了好幾次，對不對？想像角 B 已經是直角，再讓角 C 也變成直角：從 B 和 C 往上的兩條邊會變成兩條<b>平行線</b>，延伸多遠都碰不到，第三個頂點就做不出來，三角形圍不起來。', 'info');
+    qbox.append(figBox(FIG.twoRight()));
+    qbox.append(mcq('一個三角形最多可以有幾個直角？', [{ t: '0 個', why: '直角三角形就有一個直角喔。' }, { t: '1 個', ok: true, why: '對！最多只有一個直角。' }, { t: '2 個', why: '兩個直角的話，兩條邊會平行，圍不起來。' }, { t: '3 個', why: '三個直角，那就圍不出三角形了。' }],
+      () => qbox.append(mcq('一個三角形最多可以有幾個鈍角？', [{ t: '1 個', ok: true, why: '對！鈍角比直角還大，兩個鈍角的邊張得更開，更不可能碰在一起。' }, { t: '2 個', why: '兩個直角都做不到了，兩個比直角還大的角呢？' }, { t: '3 個', why: '試著把兩個角都拖成鈍角看看，做得到嗎？' }], done, () => FIG.biggestAngle())), () => FIG.right34()));
   }
-  svg.addEventListener('pointerdown', e => { const p = svgPt(svg, e); const n = pts.map((q, i) => ({ i, d: dist(q, p) })).sort((a, b) => a.d - b.d)[0]; if (n.d < 0.9) { drag = n.i; svg.setPointerCapture(e.pointerId); } });
+  function feedback() {
+    if (qShown) return;
+    const a = angs(), nR = a.filter(isR).length;
+    if (!(goal.right && goal.obtuse)) {
+      if (goal.right && !goal.obtuse) say(m, '做出直角三角形了！再試試做出鈍角三角形。', 'good');
+      else if (goal.obtuse && !goal.right) say(m, '做出鈍角三角形了！再試試做出直角三角形（可以沿著格線拖）。', 'good');
+      return;
+    }
+    if (tries === 0) { say(m, '直角三角形和鈍角三角形都做出來了。<b>挑戰：</b>能不能讓<b>兩個角</b>都變成直角？先做出一個直角，再拖別的頂點試試看。', 'info'); return; }
+    const second = nR >= 1 ? Math.max(...a.filter((x, i) => i !== a.findIndex(isR))) : 0;
+    closest = Math.max(closest, second);
+    if (nR >= 1 && second >= 75) say(m, `已經有一個直角了，另一個角是 ${Math.round(second)}°，快要變成直角了……看看橘色虛線：第三個頂點要跑到哪裡去？`, 'info');
+    else if (nR >= 1) say(m, `有一個直角了。看看橘色虛線：如果另一個角也變成直角，那條邊會怎麼走？（試了 ${tries} 次）`, 'info');
+    else say(m, `先做出一個直角，再試著讓另一個角也變成直角。（試了 ${tries} 次）`, 'info');
+    if (tries >= TRY_NEED) say(m, m.innerHTML + '<br>試了好幾次都做不到嗎？可以按下面的按鈕。', 'info');
+  }
+  svg.addEventListener('pointerdown', e => { if (qShown) return; const p = svgPt(svg, e); const n = pts.map((q, i) => ({ i, d: dist(q, p) })).sort((a, b) => a.d - b.d)[0]; if (n.d < 0.9) { drag = n.i; svg.setPointerCapture(e.pointerId); } });
   svg.addEventListener('pointermove', e => {
     if (drag < 0) return; const p = svgPt(svg, e); const q = { x: Math.min(11.5, Math.max(0.5, snap(p.x, 0.5))), y: Math.min(7.5, Math.max(0.5, snap(p.y, 0.5))) };
     const np = pts.slice(); np[drag] = q; if (Math.abs(area(np)) < 0.5) return; pts = np; draw();
-    if (!qShown) {
-      const a = kinds(), nR = a.filter(x => Math.abs(x - 90) < 0.5).length;
-      if (nR === 1 && !goal.obtuse) say(m, '做出直角三角形了！再試試做出鈍角三角形。', 'good');
-      else if (goal.right && goal.obtuse) say(m, '直角三角形和鈍角三角形都做出來了。現在挑戰：能不能讓<b>兩個角</b>都變成直角？試試看，做不到就按下面的按鈕。', 'info');
-    }
   });
-  const end = () => { drag = -1; }; svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+  const end = () => { if (drag < 0) return; drag = -1; const before = goal.right && goal.obtuse; draw(); if (before && goal.right && goal.obtuse) tries++; draw(); feedback(); };
+  svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
   el.append(box, info, list, h('div', { class: 'row' }, giveUp), m, qbox); draw(); say(m, '拖曳橘紅色的頂點，看看三個角怎麼變化。', 'info');
 }
 
@@ -621,11 +657,12 @@ CH.push({
   story: [
     '倉庫裡的旗子不夠發，鎮長方方發下方格紙、直尺和量角器。',
     '<span class="say">「每一面旗子都有規定的尺寸。畫的時候，每一步都要想一想：我為什麼這樣畫？」</span>',
-    '阿角拿起筆：<span class="say">「先畫直角三角旗，再畫等腰三角旗，最後挑戰正三角旗！」</span>'
+    '阿角拿起筆：<span class="say">「依角分，有銳角、直角、鈍角三角形；依邊分，有三邊不等長、等腰、正三角形。每一種我都要畫一面！」</span>'
   ],
-  parts: [{ title: '照規定畫三角旗', how: '拖曳三個頂點畫出三角旗（1 格＝1 公分）。下面會即時顯示邊長和角度，符合規定就會過關。', mount: mountBuild }],
+  parts: [{ title: '照規定畫七面三角旗', how: '拖曳三個頂點畫出三角旗（1 格＝1 公分）。下面會即時顯示邊長和角度。判斷看的是畫面上顯示的數字：要 5.0 就要剛好顯示 5.0。', mount: mountBuild }],
   think: {
     who: 'akak', text: '兩條腰都是 5 公分的等腰三角形，畫出來一定長得一模一樣。',
+    fig: () => FIG.isoAnim(),
     q: '你同意阿角嗎？',
     opts: [
       { t: '同意，腰一樣長，三角形就一樣。', why: '看看你剛才畫的兩面等腰三角旗：腰都是 5 公分，它們長得一樣嗎？' },
@@ -639,56 +676,83 @@ CH.push({
 function mountBuild(el, done) {
   const svg = svgEl('0 0 12 8'); const box = h('div', { class: 'stage' }); box.append(svg);
   const m = msgBox(), info = h('div', { class: 'readout' }), taskBox = h('div', { class: 'msg info' }), qbox = h('div');
-  const gallery = h('div', { class: 'readout' });
-  let pts, drag = -1, task = 0, locked = false, isoApex = null;
+  const prog = h('ul', { class: 'check' }), gallery = h('div', { class: 'gallery' });
+  let pts, drag = -1, task = 0, locked = false, isoApex = null, fails = 0;
+  /* 判斷用「畫面上顯示的數字」：顯示 4.9 就是 4.9，不會當成 5 */
+  const D = v => r1(v), DA = v => Math.round(v);
+  const exactRight = a => Math.abs(a - 90) < 0.5;
+  function apexOf(L) { for (let i = 0; i < 3; i++) if (D(L[(i + 2) % 3]) === 5 && D(L[i]) === 5) return i; return -1; }
   const TASKS = [
-    { t: '任務 1：畫一面<b>直角三角旗</b>，夾著直角的兩條邊分別是 <b>3 公分</b>和 <b>4 公分</b>。', start: [[2, 6.5], [8, 6.5], [4, 2.5]],
-      ok: (L, A) => [0, 1, 2].some(i => Math.abs(A[i] - 90) < 0.5 && (() => { const s = [L[(i + 2) % 3], L[i]].map(r1).sort((a, b) => a - b); return s[0] === 3 && s[1] === 4; })()),
-      q: ['畫直角三角旗時，為什麼要先確定有一個直角？', [{ t: '因為直角三角形一定要有一個直角，先畫直角，再量兩條邊。', ok: true, why: '對！先用直角板（或量角器）做出直角，再在兩條邊上量出 3 公分和 4 公分，最後連起來。' }, { t: '因為直角比較好畫。', why: '想想「直角三角形」這個名字，它最重要的條件是什麼？' }, { t: '因為三條邊要一樣長。', why: '直角三角形的三條邊不一定一樣長喔。' }]],
+    { key: '直角', group: '依角', t: '任務 1：畫一面<b>直角三角形</b>旗，夾著直角的兩條邊分別是 <b>3 公分</b>和 <b>4 公分</b>。', start: [[2, 6.5], [8, 6.5], [4, 2.5]],
+      ok: (L, A) => [0, 1, 2].some(i => exactRight(A[i]) && [D(L[(i + 2) % 3]), D(L[i])].sort((a, b) => a - b).join() === '3,4'),
+      hint: (L, A) => A.some(exactRight) ? '直角有了！再把夾著直角的兩條邊調成 3.0 和 4.0 公分。' : '先做出一個直角：可以讓一條邊沿著橫的格線、一條邊沿著直的格線。',
+      q: ['畫直角三角旗時，為什麼要先確定有一個直角？', [{ t: '因為直角三角形一定要有一個直角，先畫直角，再量兩條邊。', ok: true, why: '對！先做出直角，再在兩條邊上量出 3 公分和 4 公分，最後連起來。' }, { t: '因為直角比較好畫。', why: '想想「直角三角形」這個名字，它最重要的條件是什麼？' }, { t: '因為三條邊要一樣長。', why: '直角三角形的三條邊不一定一樣長喔。' }], () => FIG.right34()],
       good: '直角三角旗完成！第三條邊量起來是 5 公分。' },
-    { t: '任務 2：畫一面<b>等腰三角旗</b>，兩條腰都是 <b>5 公分</b>。', start: [[2, 6.5], [9, 6.5], [6, 3]],
-      ok: (L, A) => apexOf(L) >= 0,
-      q: ['兩條腰都要畫 5 公分，是因為？', [{ t: '等腰三角形有兩條邊一樣長，這兩條邊叫做腰。', ok: true, why: '對！兩條腰從同一個頂點出發，都量 5 公分。' }, { t: '因為三條邊都要 5 公分。', why: '三條邊都一樣長，那是正三角形喔。' }, { t: '因為底一定要最長。', why: '底不一定最長，等腰三角形看的是「兩條腰一樣長」。' }]],
-      good: '等腰三角旗完成！' },
-    { t: '任務 3：再畫一面兩條腰<b>也是 5 公分</b>，但是<b>長得不一樣</b>的等腰三角旗。', start: [[2, 6.5], [9, 6.5], [6, 3]],
+    { key: '銳角', group: '依角', t: '任務 2：畫一面<b>銳角三角形</b>旗：三個角都要比直角小。', start: [[2, 6.5], [9, 6.5], [1, 4]],
+      ok: (L, A) => Math.max(...A) < 89.5,
+      hint: (L, A) => `現在最大的角是 ${DA(Math.max(...A))}°，${Math.max(...A) > 90.5 ? '是鈍角' : '是直角'}。讓三個角都小於 90°。`,
+      q: null, good: '銳角三角旗完成！三個角都比直角小。' },
+    { key: '鈍角', group: '依角', t: '任務 3：畫一面<b>鈍角三角形</b>旗：要有一個角比直角大。', start: [[2, 6.5], [8, 6.5], [5, 2]],
+      ok: (L, A) => Math.max(...A) > 90.5,
+      hint: (L, A) => `現在最大的角是 ${DA(Math.max(...A))}°。把一個頂點往旁邊拉，讓一個角張得比直角還開。`,
+      q: ['怎麼確定它是鈍角三角形？', [{ t: '用直角板比一比，有一個角比直角大。', ok: true, why: '對！有一個角比直角大（鈍角），就是鈍角三角形。' }, { t: '三個角都比直角大。', why: '三角形最多只能有一個鈍角喔。' }, { t: '看起來扁扁的就是。', why: '要用直角板或量角器確認，不能只靠感覺。' }], () => FIG.obtuseCheck()],
+      good: '鈍角三角旗完成！' },
+    { key: '三邊不等長', group: '依邊', t: '任務 4：畫一面<b>三條邊都不一樣長</b>的三角旗。', start: [[2, 6.5], [8, 6.5], [5, 2]],
+      ok: (L) => new Set(L.map(D)).size === 3,
+      hint: (L) => `現在的邊長是 ${L.map(D).join('、')} 公分，有兩條一樣長。移動一個頂點，讓三條邊都不一樣長。`,
+      q: null, good: '三邊不等長的三角旗完成！' },
+    { key: '等腰', group: '依邊', t: '任務 5：畫一面<b>等腰三角形</b>旗，兩條腰都要剛好 <b>5.0 公分</b>。', start: [[2, 6.5], [9, 6.5], [6, 3]],
+      ok: (L) => apexOf(L) >= 0,
+      hint: (L) => `現在的邊長是 ${L.map(v => D(v).toFixed(1)).join('、')} 公分。兩條腰都要顯示 <b>5.0</b>，4.9 或 5.1 都還不行。` + (fails >= 3 ? '<br>提示：從頂點往旁邊 3 格、往下 4 格，量起來剛好 5 公分！' : ''),
+      q: ['兩條腰都要畫 5 公分，是因為？', [{ t: '等腰三角形有兩條邊一樣長，這兩條邊叫做腰。', ok: true, why: '對！兩條腰從同一個頂點出發，都量 5 公分。' }, { t: '因為三條邊都要 5 公分。', why: '三條邊都一樣長，那是正三角形喔。' }, { t: '因為底一定要最長。', why: '底不一定最長，等腰三角形看的是「兩條腰一樣長」。' }], () => FIG.isoLegs()],
+      good: '等腰三角旗完成！兩條腰都是 5.0 公分。' },
+    { key: '等腰（不一樣）', group: '依邊', t: '任務 6：再畫一面兩條腰<b>也是 5.0 公分</b>，但是<b>長得不一樣</b>的等腰三角旗。', start: [[2, 6.5], [9, 6.5], [6, 3]],
       ok: (L, A) => { const i = apexOf(L); return i >= 0 && Math.abs(A[i] - isoApex) > 5; },
-      q: null, good: '兩面等腰三角旗的腰都是 5 公分，可是頂角不一樣，形狀就不一樣！' },
-    { t: '任務 4（挑戰）：畫一面<b>正三角旗</b>，每條邊都是 <b>4 公分</b>。提示：先畫一條 4 公分的底，再找第三個頂點。', start: [[2, 6.5], [6, 6.5], [7, 3]],
-      ok: (L) => L.every(l => Math.abs(l - 4) <= 0.1),
-      q: ['畫好正三角旗以後，可以怎麼確認？', [{ t: '量三條邊都一樣長，或量三個角都是 60 度。', ok: true, why: '對！正三角形三條邊一樣長，三個角也都是 60 度。' }, { t: '看起來尖尖的就可以。', why: '看起來的感覺不一定準，要用尺或量角器確認。' }, { t: '只量一條邊就夠了。', why: '一條邊 4 公分，另外兩條呢？' }]],
-      good: '正三角旗完成！三條邊都是 4 公分。量角器量起來，三個角都差不多是 60 度（方格點上只能畫到很接近，真正的正三角形三個角都是 60 度）。' }
+      hint: (L, A) => { const i = apexOf(L); return i >= 0 ? `兩條腰都是 5.0 了，可是頂角 ${DA(A[i])}° 和上一面（${DA(isoApex)}°）差不多。讓兩條腰張開的角度不一樣。` : `兩條腰都要顯示 5.0 公分（現在是 ${L.map(v => D(v).toFixed(1)).join('、')}）。` + (fails >= 3 ? '<br>提示：從頂點往旁邊 4 格、往下 3 格，也剛好 5 公分！' : ''); },
+      q: null, good: '兩面等腰三角旗的腰都是 5.0 公分，可是頂角不一樣，形狀就不一樣！' },
+    { key: '正三角形', group: '依邊', t: '任務 7（挑戰）：畫一面<b>正三角形</b>旗，每條邊都是 <b>4.0 公分</b>。提示：先畫一條 4 公分的底，再找第三個頂點。', start: [[2, 6.5], [6, 6.5], [7, 3]],
+      ok: (L) => L.every(l => D(l) === 4),
+      hint: (L) => `現在的邊長是 ${L.map(v => D(v).toFixed(1)).join('、')} 公分，三條都要是 4.0。` + (fails >= 3 ? '<br>提示：第三個頂點放在底邊正中間的上方，大約 3.5 格高。' : ''),
+      q: ['畫好正三角旗以後，可以怎麼確認？', [{ t: '量三條邊都一樣長，或量三個角都是 60 度。', ok: true, why: '對！正三角形三條邊一樣長，三個角也都是 60 度。' }, { t: '看起來尖尖的就可以。', why: '看起來的感覺不一定準，要用尺或量角器確認。' }, { t: '只量一條邊就夠了。', why: '一條邊 4 公分，另外兩條呢？' }], () => FIG.equi60()],
+      good: '正三角旗完成！三條邊都是 4.0 公分。量角器量起來三個角都差不多是 60 度（方格點上只能畫到很接近，真正的正三角形三個角都是 60 度）。' }
   ];
-  /* 回傳兩條 5 公分邊相接的頂點（等腰的頂點），沒有就回傳 -1 */
-  function apexOf(L) { for (let i = 0; i < 3; i++) { const a = L[(i + 2) % 3], b = L[i]; if (Math.abs(a - 5) <= 0.1 && Math.abs(b - 5) <= 0.1) return i; } return -1; }
   function lens() { return [0, 1, 2].map(i => dist(pts[i], pts[(i + 1) % 3])); }
   function angs() { return [0, 1, 2].map(i => angleAt(pts, i)); }
-  function load(i) { task = i; locked = false; pts = P(TASKS[i].start); taskBox.innerHTML = TASKS[i].t; say(m, '拖曳橘紅色的頂點。', 'info'); draw(); }
+  function load(i) { task = i; locked = false; fails = 0; pts = P(TASKS[i].start); taskBox.innerHTML = TASKS[i].t; say(m, '拖曳橘紅色的頂點。', 'info'); renderProg(); draw(); }
+  function renderProg() {
+    prog.innerHTML = '';
+    TASKS.forEach((t, i) => prog.append(h('li', { class: i < task || (i === task && locked) ? 'ok' : '' }, `${t.group}：${t.key}`)));
+  }
   function draw() {
-    const L = lens(), A = angs();
-    let s = gridSVG(12, 8, 1) + gridSVG(12, 8, 0.5).replace('stroke="#d7e3ee"', 'stroke="#eef3f8"');
+    const L = lens(), A = angs(), T = TASKS[task];
+    let s = gridSVG(12, 8, 0.5).replace('stroke="#d7e3ee"', 'stroke="#eef3f8"') + gridSVG(12, 8, 1);
     s += `<polygon points="${ps(pts)}" fill="${locked ? 'rgba(182,95,168,.25)' : 'rgba(242,184,75,.25)'}" stroke="#2b3459" stroke-width="0.09" stroke-linejoin="round"/>`;
     for (let i = 0; i < 3; i++) {
-      const l = sideLabelPos(pts, i, 0.45); s += `<text x="${l.x}" y="${l.y + 0.15}" font-size="0.42" text-anchor="middle" fill="#22746f" font-weight="700">${r1(L[i])}</text>`;
-      if (Math.abs(A[i] - 90) < 0.5) { const p = pts[i], u = pts[(i + 1) % 3], w = pts[(i + 2) % 3]; const k = 0.35, a1 = { x: p.x + (u.x - p.x) / dist(p, u) * k, y: p.y + (u.y - p.y) / dist(p, u) * k }, a2 = { x: p.x + (w.x - p.x) / dist(p, w) * k, y: p.y + (w.y - p.y) / dist(p, w) * k }; s += `<polyline points="${ps([a1, { x: a1.x + a2.x - p.x, y: a1.y + a2.y - p.y }, a2])}" fill="none" stroke="#c4553d" stroke-width="0.06"/>`; }
-      const lp = labelPos(pts, i, 0.55); s += `<text x="${lp.x}" y="${lp.y + 0.15}" font-size="0.45" text-anchor="middle" font-weight="700" fill="#2b3459">${LET[i]}</text>`;
+      const l = sideLabelPos(pts, i, 0.48); s += `<text x="${l.x}" y="${l.y + 0.16}" font-size="0.46" text-anchor="middle" fill="#22746f" font-weight="700">${D(L[i]).toFixed(1)}</text>`;
+      if (exactRight(A[i])) { const p = pts[i], u = pts[(i + 1) % 3], w = pts[(i + 2) % 3]; const k = 0.35, a1 = { x: p.x + (u.x - p.x) / dist(p, u) * k, y: p.y + (u.y - p.y) / dist(p, u) * k }, a2 = { x: p.x + (w.x - p.x) / dist(p, w) * k, y: p.y + (w.y - p.y) / dist(p, w) * k }; s += `<polyline points="${ps([a1, { x: a1.x + a2.x - p.x, y: a1.y + a2.y - p.y }, a2])}" fill="none" stroke="#c4553d" stroke-width="0.06"/>`; }
+      const lp = labelPos(pts, i, 0.58); s += `<text x="${lp.x}" y="${lp.y + 0.16}" font-size="0.46" text-anchor="middle" font-weight="700" fill="#2b3459">${LET[i]}</text>`;
       s += `<circle cx="${pts[i].x}" cy="${pts[i].y}" r="0.28" fill="${locked ? '#b65fa8' : '#e8735a'}" stroke="#fff" stroke-width="0.08"/>`;
     }
     svg.innerHTML = s;
-    info.innerHTML = `<span>AB＝${r1(L[0])}</span><span>BC＝${r1(L[1])}</span><span>CA＝${r1(L[2])} 公分</span><span>∠A＝${Math.round(A[0])}°</span><span>∠B＝${Math.round(A[1])}°</span><span>∠C＝${Math.round(A[2])}°</span>`;
+    info.innerHTML = `<span>AB＝${D(L[0]).toFixed(1)}</span><span>BC＝${D(L[1]).toFixed(1)}</span><span>CA＝${D(L[2]).toFixed(1)} 公分</span><span>∠A＝${DA(A[0])}°</span><span>∠B＝${DA(A[1])}°</span><span>∠C＝${DA(A[2])}°</span>`;
+  }
+  function thumb(name) {
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y), x0 = Math.min(...xs) - 0.4, y0 = Math.min(...ys) - 0.4, w = Math.max(...xs) - x0 + 0.4, hh = Math.max(...ys) - y0 + 0.4;
+    const d = h('div', { class: 'thumb' }); d.innerHTML = `<svg viewBox="${x0} ${y0} ${w} ${hh}"><polygon points="${ps(pts)}" fill="${COL[gallery.children.length % 6]}" stroke="#2b3459" stroke-width="0.12" stroke-linejoin="round"/></svg><span>${name}</span>`;
+    gallery.append(d);
   }
   function check() {
     const L = lens(), A = angs(), T = TASKS[task];
-    if (!T.ok(L, A)) return;
-    locked = true; draw(); say(m, T.good, 'good');
-    if (task === 1) { isoApex = A[apexOf(L)]; gallery.append(h('span', null, `等腰旗 1：頂角 ${Math.round(isoApex)}°`)); }
-    if (task === 2) gallery.append(h('span', null, `等腰旗 2：頂角 ${Math.round(A[apexOf(L)])}°`));
-    const next = () => { if (task < TASKS.length - 1) qbox.append(h('div', { class: 'row' }, h('button', { class: 'btn teal', type: 'button', onclick: e => { e.target.closest('.row').remove(); qbox.innerHTML = ''; load(task + 1); } }, '下一個任務 →'))); else done(); };
-    if (T.q) qbox.append(mcq(T.q[0], T.q[1], next)); else next();
+    if (!T.ok(L, A)) { fails++; say(m, T.hint(L, A), 'warn'); return; }
+    locked = true; draw(); renderProg(); say(m, T.good, 'good'); thumb(T.key + (T.key.startsWith('等腰') ? `（頂角 ${DA(A[apexOf(L)])}°）` : ''));
+    if (task === 4) isoApex = A[apexOf(L)];
+    const next = () => { if (task < TASKS.length - 1) qbox.append(h('div', { class: 'row' }, h('button', { class: 'btn teal', type: 'button', onclick: e => { qbox.innerHTML = ''; load(task + 1); box.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, '下一個任務 →'))); else { say(m, '七面三角旗都畫好了！依邊：三邊不等長、等腰、正三角形；依角：銳角、直角、鈍角。', 'good'); done(); } };
+    if (T.q) qbox.append(mcq(T.q[0], T.q[1], next, T.q[2])); else next();
   }
   svg.addEventListener('pointerdown', e => { if (locked) return; const p = svgPt(svg, e); const n = pts.map((q, i) => ({ i, d: dist(q, p) })).sort((a, b) => a.d - b.d)[0]; if (n.d < 0.9) { drag = n.i; svg.setPointerCapture(e.pointerId); } });
   svg.addEventListener('pointermove', e => { if (drag < 0 || locked) return; const p = svgPt(svg, e); const q = { x: Math.min(11.5, Math.max(0.5, snap(p.x, 0.5))), y: Math.min(7.5, Math.max(0.5, snap(p.y, 0.5))) }; const np = pts.slice(); np[drag] = q; if (Math.abs(area(np)) < 0.5) return; pts = np; draw(); });
   const end = () => { if (drag >= 0) { drag = -1; check(); } }; svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
-  el.append(taskBox, box, info, gallery, m, qbox); load(0);
+  el.append(prog, taskBox, box, info, m, qbox, h('div', { class: 'lbl' }, '我的三角旗收藏'), gallery); load(0);
 }
 
 /* ---------- 第 6 章：雙胞胎旗子（全等） ---------- */
@@ -700,9 +764,10 @@ CH.push({
     '阿角說：<span class="say">「我們把它們疊起來看看！只能移動、旋轉、翻面，不能把旗子拉大或縮小喔。」</span>',
     '如果兩個三角形可以完全疊在一起，它們就是<b>全等</b>的三角形。'
   ],
-  parts: [{ title: '疊疊看', how: '拖曳紫色的三角形，用「左轉」「右轉」「翻面」讓它疊到虛線三角形上。如果怎麼試都疊不起來，就按「疊不起來」。', mount: mountOverlay }],
+  parts: [{ title: '疊疊看', how: '拖曳紫色的三角形，用「旋轉」滑桿和「翻面」讓它疊到虛線三角形上，再按「檢查疊合」。透明度滑桿可以讓下面的虛線看得更清楚。如果怎麼試都疊不起來，就按「疊不起來」。', mount: mountOverlay }],
   think: {
     who: 'bug', text: '有一條邊重合了，所以這兩個三角形一定全等！',
+    fig: () => FIG.oneSide(OV.rawB0, OV.rawOther, OV.lenB0, OV.lenOther),
     q: '你同意小蟲嗎？',
     opts: [
       { t: '同意，一條邊重合就夠了。', why: '想想第 4 組：有一條邊一樣長，可是第三個頂點對得上嗎？' },
@@ -713,67 +778,133 @@ CH.push({
   bridge: '六面三角旗都集齊了！遠遠傳來咚咚咚的鼓聲，廣場上的大彩帶飄了起來——三角旗節開始了！'
 });
 
-function mountOverlay(el, done) {
-  const base = P([[-2.2, 1.3], [2.4, 1.3], [-1.3, -1.9]]); // 明顯的不等邊三角形，翻面前後不會互相接近
-  const c0 = centroid(base); const B0 = base.map(p => ({ x: p.x - c0.x, y: p.y - c0.y }));
+/* 第 6 章的三角形（單位：公分）。第 4 組只有下面那條邊和原本的一樣長，頂點高很多，一眼看得出不同 */
+const OV = (() => {
+  const norm = q => { const c = centroid(q); return q.map(p => ({ x: p.x - c.x, y: p.y - c.y })); };
+  const rawB0 = P([[-2.2, 1.3], [2.4, 1.3], [-1.3, -1.9]]), rawOther = P([[-2.2, 1.3], [2.4, 1.3], [0.9, -3.2]]);
+  const B0 = norm(rawB0), other = norm(rawOther);
   const scaled = B0.map(p => ({ x: p.x * 1.3, y: p.y * 1.3 }));
-  const other = (() => { const q = P([[-2.2, 1.3], [2.4, 1.3], [1.4, -1.9]]); const c = centroid(q); return q.map(p => ({ x: p.x - c.x, y: p.y - c.y })); })();
+  const lens = t => [0, 1, 2].map(i => r1(dist(t[i], t[(i + 1) % 3])).toFixed(1));
+  return { B0, other, scaled, rawB0, rawOther, lenB0: lens(B0), lenOther: lens(other), lenScaled: lens(scaled) };
+})();
+function mountOverlay(el, done) {
+  const B0 = OV.B0, scaled = OV.scaled, other = OV.other;
   const SETS = [
     { n: '第 1 組', target: { shape: B0, rot: 60, flip: false }, cong: true },
     { n: '第 2 組', target: { shape: B0, rot: 30, flip: true }, cong: true },
-    { n: '第 3 組', target: { shape: scaled, rot: 0, flip: false }, cong: false, why: '它比較大，三條邊都比較長。不能放大縮小，所以怎麼轉、怎麼翻都疊不起來，<b>不全等</b>。' },
-    { n: '第 4 組', target: { shape: other, rot: 0, flip: false }, cong: false, why: '下面那條邊一樣長，可以重合，可是第三個頂點對不上。只有一條邊重合不夠，<b>不全等</b>。' }
+    { n: '第 3 組', target: { shape: scaled, rot: 0, flip: false }, cong: false, why: '它比較大，三條邊都比較長。不能放大縮小，所以怎麼轉、怎麼翻都疊不起來，<b>不全等</b>。', fig: () => FIG.bigSmall(OV.B0, OV.scaled, OV.lenB0, OV.lenScaled) },
+    { n: '第 4 組', target: { shape: other, rot: 0, flip: false }, cong: false, why: '下面那條邊一樣長，可以重合，可是另外兩條邊不一樣長，第三個頂點對不上。只有一條邊重合不夠，<b>不全等</b>。', fig: () => FIG.oneSide(OV.rawB0, OV.rawOther, OV.lenB0, OV.lenOther) }
   ];
   const svg = svgEl('0 0 14 8'); const box = h('div', { class: 'stage' }); box.append(svg);
   const m = msgBox(), qbox = h('div'), setRow = h('div', { class: 'row' }), status = h('ul', { class: 'check' });
-  const res = SETS.map(() => false); let si = 0, mv, drag = null, matched = false;
-  const TC = { x: 10, y: 4 };
+  const res = SETS.map(() => false); let si = 0, mv, drag = null, matched = false, showData = false, checks = 0, opacity = 0.55;
+  const TC = { x: 9.9, y: 4.1 }; // 留空間給圖上的資料標示
+  const rotIn = h('input', { type: 'range', min: '0', max: '359', step: '1', value: '0', 'aria-label': '旋轉角度' });
+  const rotVal = h('span', { class: 'rngval' }, '0°');
+  const opIn = h('input', { type: 'range', min: '15', max: '90', step: '1', value: '55', 'aria-label': '透明度' });
   function world(shape, pose) { return shape.map(p => { let q = pose.flip ? { x: -p.x, y: p.y } : p; q = rot(q, pose.rot); return { x: q.x + pose.x, y: q.y + pose.y }; }); }
   function tgt() { const t = SETS[si].target; return world(t.shape, { x: TC.x, y: TC.y, rot: t.rot, flip: t.flip }); }
   function cur() { return world(B0, mv); }
-  function load(i) { si = i; matched = false; mv = { x: 3.5, y: 4, rot: 0, flip: false }; qbox.innerHTML = ''; setRow.querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', k === i)); draw(); say(m, `${SETS[i].n}：把紫色三角形疊到虛線三角形上。`, 'info'); }
-  function matchCount() { const T = tgt(), C = cur(); const used = new Set(); let n = 0; const corr = [];
-    C.forEach((p, i) => { let bj = -1, bd = 9; T.forEach((q, j) => { const d = dist(p, q); if (d < bd && !used.has(j)) { bd = d; bj = j; } }); if (bd < 0.3) { used.add(bj); n++; corr[i] = bj; } else corr[i] = -1; }); return { n, corr }; }
+  function load(i) {
+    si = i; matched = false; showData = false; checks = 0; mv = { x: 3.5, y: 4, rot: 0, flip: false }; rotIn.value = '0'; rotVal.textContent = '0°';
+    qbox.innerHTML = ''; setRow.querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', k === i)); draw();
+    say(m, `${SETS[i].n}：拖曳紫色三角形、用滑桿旋轉或按「翻面」，把它疊到虛線三角形上，再按「檢查疊合」。`, 'info');
+  }
+  /* 每個頂點最接近的目標頂點（距離小於 tol 才算重合） */
+  function pairs(tol) { const T = tgt(), C = cur(), used = new Set(), corr = []; let n = 0;
+    C.forEach((p, i) => { let bj = -1, bd = 9; T.forEach((q, j) => { const d = dist(p, q); if (d < bd && !used.has(j)) { bd = d; bj = j; } }); if (bd < tol) { used.add(bj); n++; corr[i] = bj; } else corr[i] = -1; }); return { n, corr }; }
   function draw() {
     const T = tgt(), C = cur();
     let s = gridSVG(14, 8, 1) + `<polygon points="${ps(T)}" fill="rgba(47,156,149,.12)" stroke="#22746f" stroke-width="0.08" stroke-dasharray="0.25 0.15"/>`;
-    T.forEach((p, i) => { const l = labelPos(T, i, 1.0); s += `<text x="${l.x}" y="${l.y + 0.15}" font-size="0.5" text-anchor="middle" fill="#22746f" font-weight="700">${'DEF'[i]}</text>`; });
-    s += `<polygon points="${ps(C)}" fill="${matched ? 'rgba(47,156,149,.45)' : 'rgba(182,95,168,.45)'}" stroke="#2b3459" stroke-width="0.08" stroke-linejoin="round" style="cursor:grab"/>`;
-    C.forEach((p, i) => { const l = labelPos(C, i, 0.45); s += `<circle cx="${p.x}" cy="${p.y}" r="0.1" fill="#2b3459"/><text x="${l.x}" y="${l.y + 0.15}" font-size="0.45" text-anchor="middle" fill="#2b3459" font-weight="700">${LET[i]}</text>`; });
+    if (!showData) T.forEach((p, i) => { const l = labelPos(T, i, 1.0); s += `<text x="${l.x}" y="${l.y + 0.15}" font-size="0.5" text-anchor="middle" fill="#22746f" font-weight="700">${'DEF'[i]}</text>`; });
+    s += `<polygon points="${ps(C)}" fill="${matched ? 'rgba(47,156,149,' + opacity + ')' : 'rgba(182,95,168,' + opacity + ')'}" stroke="#2b3459" stroke-width="0.08" stroke-linejoin="round" style="cursor:grab"/>`;
+    if (matched) C.forEach(p => { s += `<circle cx="${p.x}" cy="${p.y}" r="0.42" fill="none" stroke="#f2b84b" stroke-width="0.12"/>`; });
+    if (!showData) C.forEach((p, i) => { const l = labelPos(C, i, 0.5); s += `<circle cx="${p.x}" cy="${p.y}" r="0.1" fill="#2b3459"/><text x="${l.x}" y="${l.y + 0.15}" font-size="0.5" text-anchor="middle" fill="#2b3459" font-weight="700">${LET[i]}</text>`; });
+    /* 確認完全疊合、找對對應以後，才把對應邊長、對應角標在圖上 */
+    if (showData) {
+      const corr = pairs(0.05).corr, g = centroid(C), D3 = 'DEF';
+      /* 三角形上：頂點「A（D）」、每條邊的長度、每個角的度數 */
+      for (let i = 0; i < 3; i++) {
+        const j = (i + 1) % 3, len = r1(dist(C[i], C[j])).toFixed(1), a = Math.round(angleAt(C, i));
+        s += `<path d="${arcPath(C[i], C[(i + 2) % 3], C[j], 0.75)}" fill="#e8735a" opacity=".45"/>`;
+        const sl = sideLabelPos(C, i, 0.42), nm = labelPos(C, i, 0.62);
+        const v = { x: g.x - C[i].x, y: g.y - C[i].y }, vl = Math.hypot(v.x, v.y), ap = { x: C[i].x + v.x / vl * Math.min(1.15, vl * 0.55), y: C[i].y + v.y / vl * Math.min(1.15, vl * 0.55) };
+        s += `<text x="${sl.x}" y="${sl.y + 0.14}" font-size="0.4" text-anchor="middle" fill="#22746f" font-weight="700" paint-order="stroke" stroke="#fff" stroke-width="0.14">${len}</text>`;
+        s += `<text x="${ap.x}" y="${ap.y + 0.13}" font-size="0.36" text-anchor="middle" fill="#c4553d" font-weight="700" paint-order="stroke" stroke="#fff" stroke-width="0.12">${a}°</text>`;
+        s += `<circle cx="${C[i].x}" cy="${C[i].y}" r="0.1" fill="#2b3459"/><text x="${nm.x}" y="${nm.y + 0.15}" font-size="0.42" text-anchor="middle" fill="#2b3459" font-weight="700">${LET[i]}（${D3[corr[i]]}）</text>`;
+      }
+      /* 左邊空白處：對應邊、對應角的資料卡 */
+      const rows = [0, 1, 2].map(i => { const j = (i + 1) % 3; return [`${LET[i]}${LET[j]} ＝ ${D3[corr[i]]}${D3[corr[j]]}`, `${r1(dist(C[i], C[j])).toFixed(1)} 公分`, '#22746f']; })
+        .concat([0, 1, 2].map(i => [`∠${LET[i]} ＝ ∠${D3[corr[i]]}`, `${Math.round(angleAt(C, i))}°`, '#c4553d']));
+      s += `<rect x="0.3" y="0.45" width="4.9" height="${1.0 + rows.length * 0.62}" rx="0.2" fill="#fff" stroke="#2f9c95" stroke-width="0.05"/>`;
+      s += `<text x="0.65" y="1.0" font-size="0.4" font-weight="700" fill="#2b3459">對應邊・對應角</text>`;
+      rows.forEach(([k, v, col], r) => { const y = 1.65 + r * 0.62; s += `<text x="0.65" y="${y}" font-size="0.38" font-weight="700" fill="${col}">${k}</text><text x="4.95" y="${y}" font-size="0.38" font-weight="700" fill="${col}" text-anchor="end">${v}</text>`; });
+    }
     svg.innerHTML = s;
     status.innerHTML = ''; SETS.forEach((st, i) => status.append(h('li', { class: res[i] ? 'ok' : '' }, st.n)));
   }
-  function afterMove() {
-    if (matched) return;
-    const { n, corr } = matchCount(); draw();
-    const t = SETS[si].target;
-    /* 真正疊合：翻面狀態一樣、旋轉角度一樣、位置對準。只看「頂點很接近」會把沒翻面的也算進去 */
-    const sameFlip = mv.flip === t.flip, sameRot = ((mv.rot - t.rot) % 360 + 360) % 360 === 0, near = dist(mv, TC) < 0.6;
-    if (SETS[si].cong && sameFlip && sameRot && near) {
-      matched = true; mv.x = TC.x; mv.y = TC.y; draw();
-      const fin = matchCount(); corr.splice(0, 3, ...fin.corr);
-      say(m, '三個頂點都重合了，完全疊在一起！這兩個三角形<b>全等</b>。', 'good');
-      const ans = 'DEF'[corr[0]];
-      qbox.append(mcq('頂點 A 疊到了哪一個頂點上？', 'DEF'.split('').map(k => ({ t: '頂點 ' + k, ok: k === ans, why: k === ans ? `對！A 對到 ${ans}。全等三角形的對應頂點疊在一起，對應邊一樣長、對應角一樣大。` : '看看圖上，A 疊在哪一個字母旁邊？' })), () => resolve(si)));
-    } else if (n === 3 || (near && SETS[si].cong)) say(m, '很接近了，可是還沒有完全重合。仔細看看邊有沒有對齊？要不要先翻面，或再轉一轉？', 'info');
-    else if (n === 2) say(m, '有兩個頂點重合了（一條邊重合），第三個頂點呢？再轉一轉、翻翻看。', 'info');
+  function check() {
+    if (matched || res[si]) return;
+    checks++;
+    const t = SETS[si].target, d = ((mv.rot - t.rot) % 360 + 360) % 360, rotOK = Math.min(d, 360 - d) <= 4;
+    /* 真正疊合：翻面狀態一樣、角度差 4° 以內、位置對準；成功後自動對齊到剛好重合 */
+    if (SETS[si].cong && mv.flip === t.flip && rotOK && dist(mv, TC) < 0.5) {
+      matched = true; mv = { x: TC.x, y: TC.y, rot: t.rot, flip: t.flip }; rotIn.value = String(t.rot); rotVal.textContent = t.rot + '°'; draw();
+      say(m, '三個頂點都重合了，<b>完整疊合</b>！它們是全等三角形。接下來找對應。', 'good');
+      askCorr(); return;
+    }
+    const { n } = pairs(0.35);
+    let text = n === 2 ? '有兩個頂點重合了（一條邊重合），可是第三個頂點沒有重合。只有一條邊重合不夠，還要看第三個頂點。'
+      : n === 1 ? '目前只有一個頂點重合。再轉一轉、翻面試試，其他頂點和邊也要一起對齊。'
+      : n === 3 ? '很接近了，可是還沒有完全重合。看看每條邊有沒有貼齊？要不要先翻面，或再轉一點點？'
+      : '目前沒有頂點重合。先把它拖到虛線三角形上，再旋轉或翻面試試。';
+    if (!SETS[si].cong && checks >= 2) text += '<br>如果怎麼移動、旋轉、翻面都疊不起來，可以按「疊不起來」。';
+    say(m, text, n === 3 ? 'info' : 'warn');
   }
-  function resolve(i) { res[i] = true; draw(); if (res.every(Boolean)) { say(m, '四組都判斷完了！第 1、2 組全等；第 3 組大小不同、第 4 組只有一條邊一樣，都不全等。', 'good'); done(); } else { const nx = res.findIndex(x => !x); qbox.append(h('div', { class: 'row' }, h('button', { class: 'btn teal', type: 'button', onclick: () => load(nx) }, `換${SETS[nx].n} →`))); } }
+  function askCorr() {
+    const corr = pairs(0.05).corr;
+    const wrap = h('div', { class: 'corr' }, h('div', { class: 'lbl' }, '疊合後，A、B、C 各對到哪一點？（先自己選，再看結果）'));
+    const sels = LET.map(L => { const sl = h('select', { 'aria-label': L + ' 對到哪一點' }, h('option', { value: '' }, `${L} 對到…`), ...'DEF'.split('').map(k => h('option', { value: k }, k + ' 點'))); return sl; });
+    const out = h('div', { class: 'corr-out' });
+    const go = h('button', { class: 'btn teal small', type: 'button', onclick: () => {
+      if (sels.some(sl => !sl.value)) { out.innerHTML = '<p class="warn-t">三個都選好，再看結果。</p>'; return; }
+      const ok = sels.map((sl, i) => sl.value === 'DEF'[corr[i]]);
+      out.innerHTML = sels.map((sl, i) => ok[i] ? `<p>✓ ${LET[i]} 點對到 ${sl.value} 點：疊合時這兩點重合。</p>` : `<p class="warn-t">✗ ${LET[i]} 點對到 ${sl.value} 點？看看圖上 ${LET[i]} 疊在哪一個字母旁邊（黃色圓圈）。</p>`).join('');
+      if (!ok.every(Boolean)) return;
+      sels.forEach(sl => sl.disabled = true); go.disabled = true; showData = true; draw();
+      const C = cur();
+      const lines = [0, 1, 2].map(i => { const j = (i + 1) % 3; return `<p>${LET[i]}${LET[j]} 邊對到 ${'DEF'[corr[i]]}${'DEF'[corr[j]]} 邊，長度都是 ${r1(dist(C[i], C[j])).toFixed(1)} 公分。</p>`; })
+        .concat([0, 1, 2].map(i => `<p>角 ${LET[i]} 對到角 ${'DEF'[corr[i]]}，兩個角重合，都是約 ${Math.round(angleAt(C, i))}°。</p>`));
+      out.innerHTML += `<div class="corr-data">${lines.join('')}<p class="key-t">全等圖形的形狀、大小相同；對應邊等長，對應角相等。</p><p class="note">圖上也標出了對應邊和對應角，對照看看。</p></div>`;
+      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      resolve(si);
+    } }, '看結果');
+    wrap.append(h('div', { class: 'row' }, ...sels, go), out); qbox.innerHTML = ''; qbox.append(wrap);
+  }
+  function resolve(i) {
+    res[i] = true; draw();
+    if (res.every(Boolean)) { qbox.append(h('div', { class: 'msg good' }, '四組都判斷完了！第 1、2 組全等；第 3 組大小不同、第 4 組只有一條邊一樣長，都不全等。')); done(); }
+    else { const nx = res.findIndex(x => !x); qbox.append(h('div', { class: 'row' }, h('button', { class: 'btn teal', type: 'button', onclick: () => { load(nx); box.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, `換${SETS[nx].n} →`))); }
+  }
   SETS.forEach((st, i) => setRow.append(h('button', { class: 'btn ghost small', type: 'button', onclick: () => load(i) }, st.n)));
+  rotIn.addEventListener('input', () => { if (matched) { rotIn.value = String(mv.rot); return; } mv.rot = +rotIn.value; rotVal.textContent = rotIn.value + '°'; draw(); });
+  opIn.addEventListener('input', () => { opacity = +opIn.value / 100; draw(); });
+  const sliders = h('div', { class: 'sliders' },
+    h('label', { class: 'rng' }, h('span', null, '旋轉'), rotIn, rotVal),
+    h('label', { class: 'rng' }, h('span', null, '透明度'), opIn));
   const tools = h('div', { class: 'row' },
-    h('button', { class: 'btn ghost small', type: 'button', onclick: () => { if (matched) return; mv.rot = (mv.rot + 345) % 360; afterMove(); } }, '↺ 左轉 15°'),
-    h('button', { class: 'btn ghost small', type: 'button', onclick: () => { if (matched) return; mv.rot = (mv.rot + 15) % 360; afterMove(); } }, '↻ 右轉 15°'),
-    h('button', { class: 'btn ghost small', type: 'button', onclick: () => { if (matched) return; mv.flip = !mv.flip; afterMove(); } }, '⇋ 翻面'),
+    h('button', { class: 'btn ghost small', type: 'button', onclick: () => { if (matched) return; mv.flip = !mv.flip; draw(); } }, '⇋ 翻面'),
     h('button', { class: 'btn ghost small', type: 'button', onclick: () => load(si) }, '重來'),
+    h('button', { class: 'btn teal small', type: 'button', onclick: check }, '檢查疊合'),
     h('button', { class: 'btn small', type: 'button', onclick: () => {
       if (res[si] || matched) return;
-      if (SETS[si].cong) say(m, '這一組其實疊得起來喔！再試試旋轉，或是先「翻面」再旋轉。', 'warn');
-      else { say(m, SETS[si].why, 'good'); resolve(si); }
+      if (SETS[si].cong) say(m, '這一組其實疊得起來喔！慢慢拉旋轉滑桿，或是先「翻面」再旋轉。', 'warn');
+      else { say(m, SETS[si].why, 'good'); qbox.innerHTML = ''; qbox.append(figBox(SETS[si].fig)); resolve(si); }
     } }, '疊不起來'));
   svg.addEventListener('pointerdown', e => { if (matched) return; const p = svgPt(svg, e); if (inPoly(p, cur()) || cur().some(q => dist(q, p) < 0.6)) { drag = { dx: p.x - mv.x, dy: p.y - mv.y }; svg.setPointerCapture(e.pointerId); } });
   svg.addEventListener('pointermove', e => { if (!drag) return; const p = svgPt(svg, e); mv.x = Math.min(13.5, Math.max(0.5, p.x - drag.dx)); mv.y = Math.min(7.5, Math.max(0.5, p.y - drag.dy)); draw(); });
-  const end = () => { if (drag) { drag = null; afterMove(); } }; svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
-  el.append(setRow, box, tools, status, m, qbox); load(0);
+  const end = () => { drag = null; }; svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+  el.append(setRow, sliders, box, tools, status, m, qbox); load(0);
 }
 
 /* ---------- 終章：三角旗節 ---------- */
@@ -795,7 +926,8 @@ function mountQuiz(el, done) {
     ['怎麼確定兩個三角形全等？', [{ t: '移動、旋轉或翻面以後，可以完全疊在一起。', ok: true }, { t: '有一條邊一樣長就好。' }, { t: '顏色和方向一樣。' }]]
   ];
   let n = 0;
-  Q.forEach(([q, o], i) => el.append(mcq(`${i + 1}. ${q}`, o.map(x => Object.assign({}, x, { why: x.ok ? '答對了！' : '再想想看，可以回到前面的章節看看。' })), () => { n++; if (n === Q.length) done(); })));
+  const FIGS = [() => FIG.triBasic(), () => FIG.equi5(), () => FIG.t306090(), () => FIG.t1004040(), () => FIG.twoRight(), () => FIG.overlayAnim()];
+  Q.forEach(([q, o], i) => el.append(mcq(`${i + 1}. ${q}`, o.map(x => Object.assign({}, x, { why: x.ok ? '答對了！看看下面的圖。' : '再想想看，可以回到前面的章節看看。' })), () => { n++; if (n === Q.length) done(); }, FIGS[i])));
 }
 function mountTeach(el, done) {
   const topics = ['什麼是三角形', '頂點、邊、角', '依邊長分類', '依角分類', '怎麼畫三角形', '全等'];
@@ -866,7 +998,7 @@ function go(i) {
     const fl = h('div', { class: 'flagwin' }); fl.innerHTML = flagSVG(c.color, true); fl.append(h('span', null, first ? `你得到第 ${i + 1} 面三角旗！` : `第 ${i + 1} 面三角旗已經收集了。`));
     const br = h('div', { class: 'bridge' }, fl, h('div', null, c.bridge), h('button', { class: 'btn', type: 'button', onclick: () => go(i + 1) }, i + 1 < CH.length ? `翻到第 ${i + 2} 章 →` : '前往三角旗節 →'));
     bridgeSlot.append(br); setTimeout(() => br.scrollIntoView({ behavior: 'smooth', block: 'center' }), 700);
-  }));
+    }, c.think.fig));
   page.append(thinkSec, bridgeSlot);
   app.append(page);
   parts[0].unlock();
