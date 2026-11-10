@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>阿角的三角旗節｜四年級三角形探索繪本</title>
+  <meta name="description" content="四年級上學期「三角形」單元的互動數學繪本：跟著阿角集滿六面三角旗，探索三角形的邊、頂點、角、分類、畫法與全等。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&display=swap">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cpolygon points=%2716,3 30,28 2,28%27 fill=%27%23f6c94c%27 stroke=%27%232b3459%27 stroke-width=%272.5%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="topbar">
+    <button id="btn-home" class="tb-btn" type="button" aria-label="回到封面">🏠</button>
+    <div id="bunting" aria-label="已收集的三角旗"></div>
+    <button id="btn-menu" class="tb-btn" type="button" aria-label="章節目錄">目錄</button>
+  </header>
+
+  <nav id="menu" hidden>
+    <div class="menu-card">
+      <h2>章節目錄</h2>
+      <ol id="menu-list"></ol>
+      <div class="row">
+        <button type="button" class="btn ghost" id="btn-teacher">給老師的說明</button>
+        <button type="button" class="btn ghost" id="btn-reset">清除進度</button>
+        <button type="button" class="btn" id="btn-menu-close">關閉</button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="app" aria-live="polite"></main>
+
+  <dialog id="teacher">
+    <div class="teacher-body">
+      <h2>給老師的說明</h2>
+      <p>這是四年級上學期「三角形」單元的探索式繪本。學生跟著主角阿角完成任務，每完成一章就得到一面三角旗。所有操作都在學生的裝置上進行，不上傳任何資料。</p>
+      <table>
+        <thead><tr><th>章節</th><th>學習重點</th><th>常見迷思（阿角的想法）</th></tr></thead>
+        <tbody>
+          <tr><td>1 誰是真正的三角形？</td><td>三角形由三條直線段首尾相接圍成，有三個頂點。</td><td>倒放或細長的就不是三角形；圓角、彎邊也算三角形。</td></tr>
+          <tr><td>2 用線段圍住花</td><td>最少三條線段才能圍成封閉圖形；認識頂點、邊、角及其名稱。</td><td>三點排成一直線也能圍成三角形。</td></tr>
+          <tr><td>3 依邊長分隊</td><td>用直尺量邊長，依邊分類；認識等腰三角形（腰、底、頂角、底角）與正三角形。</td><td>等腰三角形的底一定在下面；正三角形不是等腰三角形。</td></tr>
+          <tr><td>4 依角排隊伍</td><td>用直角比較角的大小，依角分類為銳角、直角、鈍角三角形。</td><td>有一個銳角就是銳角三角形；三角形可以有兩個直角。</td></tr>
+          <tr><td>5 自己畫三角旗</td><td>依指定條件畫出直角、等腰、正三角形，並說出每一步的理由。</td><td>兩腰一樣長的等腰三角形一定長得一樣。</td></tr>
+          <tr><td>6 雙胞胎旗子</td><td>用平移、旋轉、翻面疊合判斷全等，找出對應頂點。</td><td>有一條邊重合就是全等。</td></tr>
+          <tr><td>終章 三角旗節</td><td>總複習與「小老師」口語表達。</td><td>—</td></tr>
+        </tbody>
+      </table>
+      <h3>使用建議</h3>
+      <ul>
+        <li>每章最後的「阿角的想法」適合全班討論：先請學生表態，再請他們用圖上的證據說服阿角。</li>
+        <li>「說說看」的句型可以配合兩人一組輪流說，不需要寫下來。</li>
+        <li>第 5 章用拖曳與即時量測代替實體作圖，建議課後再用直尺、量角器在紙上畫一次。</li>
+        <li>三角形內角和、兩邊和大於第三邊、三角形面積公式屬於五年級內容，本站不教公式。</li>
+      </ul>
+      <div class="row"><button type="button" class="btn" id="btn-teacher-close">關閉</button></div>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
