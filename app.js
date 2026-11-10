@@ -456,11 +456,18 @@ function mountIso(el, done) {
       s += `<path d="${arcPath(A, B, C, 0.7)}" fill="rgba(123,143,214,.4)"/>`;
       const l1 = sideLabelPos(t, 0, 0.55), l2 = sideLabelPos(t, 2, 0.55), l3 = sideLabelPos(t, 1, 0.5);
       s += `<text x="${l1.x}" y="${l1.y}" font-size="0.5" text-anchor="middle" fill="#22746f" font-weight="700">腰 ${ab}</text><text x="${l2.x}" y="${l2.y}" font-size="0.5" text-anchor="middle" fill="#22746f" font-weight="700">腰 ${ac}</text><text x="${l3.x}" y="${l3.y + 0.2}" font-size="0.5" text-anchor="middle" fill="#2b3459">底</text>`;
-      s += `<text x="${A.x}" y="${A.y + 1.25}" font-size="0.46" text-anchor="middle" fill="#3b4a96">頂角</text><text x="${B.x + 1.1}" y="${B.y - 0.25}" font-size="0.46" text-anchor="middle" fill="#c4553d">底角</text><text x="${C.x - 1.1}" y="${C.y - 0.25}" font-size="0.46" text-anchor="middle" fill="#c4553d">底角</text>`;
     } else {
       const l1 = sideLabelPos(t, 0, 0.5), l2 = sideLabelPos(t, 2, 0.5);
       s += `<text x="${l1.x}" y="${l1.y}" font-size="0.5" text-anchor="middle" fill="#2b3459">${ab}</text><text x="${l2.x}" y="${l2.y}" font-size="0.5" text-anchor="middle" fill="#2b3459">${ac}</text>`;
     }
+    /* 三個角隨時標出度數；變成等腰三角形時，加上「頂角」「底角」的名稱 */
+    if (!iso) s += `<path d="${arcPath(A, B, C, 0.7)}" fill="rgba(123,143,214,.3)"/>`;
+    const g = centroid(t);
+    [[A, aA, '頂角', '#3b4a96'], [B, aB, '底角', '#c4553d'], [C, aC, '底角', '#c4553d']].forEach(([p, deg, nm, col]) => {
+      const v = { x: g.x - p.x, y: g.y - p.y }, vl = Math.hypot(v.x, v.y), k = Math.min(1.7, vl * 0.62), q = { x: p.x + v.x / vl * k, y: p.y + v.y / vl * k };
+      const label = iso ? `${nm} ${deg}°` : `${deg}°`;
+      s += `<text x="${q.x}" y="${q.y + 0.17}" font-size="0.48" text-anchor="middle" font-weight="700" fill="${col}" paint-order="stroke" stroke="#fff" stroke-width="0.14">${label}</text>`;
+    });
     s += `<circle cx="${A.x}" cy="${A.y}" r="0.32" fill="#e8735a" stroke="#fff" stroke-width="0.08" style="cursor:grab"/>`;
     [['A', A, 0, -0.5], ['B', B, -0.4, 0.45], ['C', C, 0.4, 0.45]].forEach(([n, p, dx, dy]) => s += `<text x="${p.x + dx}" y="${p.y + dy}" font-size="0.5" text-anchor="middle" font-weight="700" fill="#2b3459">${n}</text>`);
     svg.innerHTML = s;
