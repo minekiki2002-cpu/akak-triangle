@@ -154,3 +154,7 @@ dialog#teacher::backdrop{background:rgba(43,52,89,.4)}
 .card .row .btn{flex:1 1 100%;font-size:14px;padding:4px 6px;min-height:34px}
 .part,.bridge,.book{scroll-margin-top:72px}
 .stage{max-width:760px;margin-left:auto;margin-right:auto}
+/* 放大時：目錄與說明視窗可以捲動，按鈕不會跑到畫面外 */
+#menu{overflow-y:auto;padding:60px 12px 24px}
+.menu-card{margin-bottom:24px}
+dialog#teacher{max-height:calc(100dvh - 24px);overflow-y:auto}

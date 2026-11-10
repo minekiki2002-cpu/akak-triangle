@@ -20,7 +20,13 @@ function h(tag, attrs, ...kids) {
 }
 const NS = 'http://www.w3.org/2000/svg';
 function svgEl(vb, cls) { const s = document.createElementNS(NS, 'svg'); s.setAttribute('viewBox', vb); if (cls) s.setAttribute('class', cls); return s; }
-function svgPt(svg, e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+/* 用畫面上的實際大小換算座標：瀏覽器放大縮小（含 Safari）都準確 */
+function svgPt(svg, e) {
+  const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  const k = Math.min(r.width / vb.width, r.height / vb.height); // preserveAspectRatio: xMidYMid meet
+  const ox = r.left + (r.width - vb.width * k) / 2, oy = r.top + (r.height - vb.height * k) / 2;
+  return { x: vb.x + (e.clientX - ox) / k, y: vb.y + (e.clientY - oy) / k };
+}
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const r1 = v => Math.round(v * 10) / 10;
 const snap = (v, s) => Math.round(v / s) * s;
@@ -708,10 +714,10 @@ CH.push({
 });
 
 function mountOverlay(el, done) {
-  const base = P([[-1.8, 1.2], [2.2, 1.2], [-0.4, -1.6]]); // 不等邊三角形
+  const base = P([[-2.2, 1.3], [2.4, 1.3], [-1.3, -1.9]]); // 明顯的不等邊三角形，翻面前後不會互相接近
   const c0 = centroid(base); const B0 = base.map(p => ({ x: p.x - c0.x, y: p.y - c0.y }));
   const scaled = B0.map(p => ({ x: p.x * 1.3, y: p.y * 1.3 }));
-  const other = (() => { const q = P([[-1.8, 1.2], [2.2, 1.2], [1.2, -1.6]]); const c = centroid(q); return q.map(p => ({ x: p.x - c.x, y: p.y - c.y })); })();
+  const other = (() => { const q = P([[-2.2, 1.3], [2.4, 1.3], [1.4, -1.9]]); const c = centroid(q); return q.map(p => ({ x: p.x - c.x, y: p.y - c.y })); })();
   const SETS = [
     { n: '第 1 組', target: { shape: B0, rot: 60, flip: false }, cong: true },
     { n: '第 2 組', target: { shape: B0, rot: 30, flip: true }, cong: true },
@@ -727,7 +733,7 @@ function mountOverlay(el, done) {
   function cur() { return world(B0, mv); }
   function load(i) { si = i; matched = false; mv = { x: 3.5, y: 4, rot: 0, flip: false }; qbox.innerHTML = ''; setRow.querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', k === i)); draw(); say(m, `${SETS[i].n}：把紫色三角形疊到虛線三角形上。`, 'info'); }
   function matchCount() { const T = tgt(), C = cur(); const used = new Set(); let n = 0; const corr = [];
-    C.forEach((p, i) => { let bj = -1, bd = 9; T.forEach((q, j) => { const d = dist(p, q); if (d < bd && !used.has(j)) { bd = d; bj = j; } }); if (bd < 0.35) { used.add(bj); n++; corr[i] = bj; } else corr[i] = -1; }); return { n, corr }; }
+    C.forEach((p, i) => { let bj = -1, bd = 9; T.forEach((q, j) => { const d = dist(p, q); if (d < bd && !used.has(j)) { bd = d; bj = j; } }); if (bd < 0.3) { used.add(bj); n++; corr[i] = bj; } else corr[i] = -1; }); return { n, corr }; }
   function draw() {
     const T = tgt(), C = cur();
     let s = gridSVG(14, 8, 1) + `<polygon points="${ps(T)}" fill="rgba(47,156,149,.12)" stroke="#22746f" stroke-width="0.08" stroke-dasharray="0.25 0.15"/>`;
@@ -740,13 +746,17 @@ function mountOverlay(el, done) {
   function afterMove() {
     if (matched) return;
     const { n, corr } = matchCount(); draw();
-    if (n === 3) {
-      if (!SETS[si].cong) return; // 不可能發生，保險
-      matched = true; const t = SETS[si].target; mv.x = TC.x; mv.y = TC.y; draw();
+    const t = SETS[si].target;
+    /* 真正疊合：翻面狀態一樣、旋轉角度一樣、位置對準。只看「頂點很接近」會把沒翻面的也算進去 */
+    const sameFlip = mv.flip === t.flip, sameRot = ((mv.rot - t.rot) % 360 + 360) % 360 === 0, near = dist(mv, TC) < 0.6;
+    if (SETS[si].cong && sameFlip && sameRot && near) {
+      matched = true; mv.x = TC.x; mv.y = TC.y; draw();
+      const fin = matchCount(); corr.splice(0, 3, ...fin.corr);
       say(m, '三個頂點都重合了，完全疊在一起！這兩個三角形<b>全等</b>。', 'good');
       const ans = 'DEF'[corr[0]];
       qbox.append(mcq('頂點 A 疊到了哪一個頂點上？', 'DEF'.split('').map(k => ({ t: '頂點 ' + k, ok: k === ans, why: k === ans ? `對！A 對到 ${ans}。全等三角形的對應頂點疊在一起，對應邊一樣長、對應角一樣大。` : '看看圖上，A 疊在哪一個字母旁邊？' })), () => resolve(si)));
-    } else if (n === 2) say(m, '有兩個頂點重合了（一條邊重合），第三個頂點呢？再轉一轉、翻翻看。', 'info');
+    } else if (n === 3 || (near && SETS[si].cong)) say(m, '很接近了，可是還沒有完全重合。仔細看看邊有沒有對齊？要不要先翻面，或再轉一轉？', 'info');
+    else if (n === 2) say(m, '有兩個頂點重合了（一條邊重合），第三個頂點呢？再轉一轉、翻翻看。', 'info');
   }
   function resolve(i) { res[i] = true; draw(); if (res.every(Boolean)) { say(m, '四組都判斷完了！第 1、2 組全等；第 3 組大小不同、第 4 組只有一條邊一樣，都不全等。', 'good'); done(); } else { const nx = res.findIndex(x => !x); qbox.append(h('div', { class: 'row' }, h('button', { class: 'btn teal', type: 'button', onclick: () => load(nx) }, `換${SETS[nx].n} →`))); } }
   SETS.forEach((st, i) => setRow.append(h('button', { class: 'btn ghost small', type: 'button', onclick: () => load(i) }, st.n)));
