@@ -729,6 +729,11 @@ function mountBuild(el, done) {
     s += `<polygon points="${ps(pts)}" fill="${locked ? 'rgba(182,95,168,.25)' : 'rgba(242,184,75,.25)'}" stroke="#2b3459" stroke-width="0.09" stroke-linejoin="round"/>`;
     for (let i = 0; i < 3; i++) {
       const l = sideLabelPos(pts, i, 0.48); s += `<text x="${l.x}" y="${l.y + 0.16}" font-size="0.46" text-anchor="middle" fill="#22746f" font-weight="700">${D(L[i]).toFixed(1)}</text>`;
+      /* 每個角隨時標出度數：綠色銳角、紅色直角、紫色鈍角 */
+      { const col = exactRight(A[i]) ? '#c4553d' : A[i] > 90 ? '#b65fa8' : '#2f9c95';
+        const g = centroid(pts), v = { x: g.x - pts[i].x, y: g.y - pts[i].y }, vl = Math.hypot(v.x, v.y), k = Math.min(1.25, vl * 0.6);
+        if (!exactRight(A[i])) s += `<path d="${arcPath(pts[i], pts[(i + 2) % 3], pts[(i + 1) % 3], 0.6)}" fill="${col}" opacity=".35"/>`;
+        s += `<text x="${pts[i].x + v.x / vl * k}" y="${pts[i].y + v.y / vl * k + 0.16}" font-size="0.44" text-anchor="middle" font-weight="700" fill="${col}" paint-order="stroke" stroke="#fff" stroke-width="0.14">${DA(A[i])}°</text>`; }
       if (exactRight(A[i])) { const p = pts[i], u = pts[(i + 1) % 3], w = pts[(i + 2) % 3]; const k = 0.35, a1 = { x: p.x + (u.x - p.x) / dist(p, u) * k, y: p.y + (u.y - p.y) / dist(p, u) * k }, a2 = { x: p.x + (w.x - p.x) / dist(p, w) * k, y: p.y + (w.y - p.y) / dist(p, w) * k }; s += `<polyline points="${ps([a1, { x: a1.x + a2.x - p.x, y: a1.y + a2.y - p.y }, a2])}" fill="none" stroke="#c4553d" stroke-width="0.06"/>`; }
       const lp = labelPos(pts, i, 0.58); s += `<text x="${lp.x}" y="${lp.y + 0.16}" font-size="0.46" text-anchor="middle" font-weight="700" fill="#2b3459">${LET[i]}</text>`;
       s += `<circle cx="${pts[i].x}" cy="${pts[i].y}" r="0.28" fill="${locked ? '#b65fa8' : '#e8735a'}" stroke="#fff" stroke-width="0.08"/>`;
